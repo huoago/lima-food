@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>利马·美食推荐</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+  header { background: #ffcc00; padding: 10px; text-align: center; }
+  #controls { display: flex; justify-content: center; padding: 10px; gap: 10px; flex-wrap: wrap; }
+  select, button { padding: 5px 10px; font-size: 14px; }
+  #results { display: grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap: 10px; padding: 10px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
+  .card img { width: 100%; height: 150px; object-fit: cover; }
+  .card-content { padding: 10px; }
+  .rating { color: #ff9900; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">利马·美食推荐</h1>
+  <p id="subtitle">发现附近的秘鲁风味和世界料理（Google 实时数据）</p>
+</header>
+
+<div id="controls">
+  <select id="language">
+    <option value="zh">中文</option>
+    <option value="es">Español</option>
+    <option value="en">English</option>
+  </select>
+  <select id="category">
+    <option value="">全部</option>
+    <option value="beef">牛肉</option>
+    <option value="lamb">羊肉</option>
+    <option value="chicken">鸡肉</option>
+    <option value="pork">猪肉</option>
+    <option value="seafood">海鲜</option>
+    <option value="vegetarian">素食</option>
+  </select>
+  <button id="refresh">🔄 刷新</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+const localKey = "AIzaSyC61IUOd9Y2bnBgjok4mtf2tJuEPROnWPM"; // 本地调试 Key
+let mapsKey = localKey;
+let map, service;
+
+async function getKey() {
+  try {
+    const res = await fetch('/api/get-maps-key');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.key) mapsKey = data.key;
+    }
+  } catch (e) {
+    console.warn("使用本地 Key 调试");
+  }
+}
+
+function loadGoogleMaps() {
+  return new Promise(resolve => {
+    if (window.google && window.google.maps) return resolve();
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKey}&libraries=places&language=${document.getElementById('language').value}`;
+    script.async = true;
+    script.onload = resolve;
+    document.head.appendChild(script);
+  });
+}
+
+function fetchPlaces(category = '') {
+  const lima = new google.maps.LatLng(-12.0464, -77.0428);
+  map = new google.maps.Map(document.createElement('div'));
+  service = new google.maps.places.PlacesService(map);
+
+  let query = "restaurant in Lima Peru";
+  if (category) query = `${category} restaurant in Lima Peru`;
+
+  service.textSearch({ query }, (results, status) => {
+    const container = document.getElementById('results');
+    container.innerHTML = '';
+    if (status === google.maps.places.PlacesServiceStatus.OK) {
+      results.forEach(place => {
+        const photoUrl = place.photos?.[0]?.getUrl({maxWidth:400}) || '';
+        const openStatus = place.opening_hours?.isOpen() ? '营业中' : '休息中';
+        container.innerHTML += `
+          <div class="card">
+            ${photoUrl ? `<img src="${photoUrl}">` : ''}
+            <div class="card-content">
+              <h3>${place.name}</h3>
+              <p class="rating">⭐ ${place.rating || 'N/A'} (${place.user_ratings_total || 0})</p>
+              <p>${openStatus}</p>
+              <p>${place.price_level ? '💲'.repeat(place.price_level) : ''}</p>
+              <p>${place.formatted_address || ''}</p>
+            </div>
+          </div>
+        `;
+      });
+    }
+  });
+}
+
+async function init() {
+  await getKey();
+  await loadGoogleMaps();
+  fetchPlaces();
+}
+
+document.getElementById('refresh').addEventListener('click', () => {
+  const categoryMap = {
+    beef: 'beef',
+    lamb: 'lamb',
+    chicken: 'chicken',
+    pork: 'pork',
+    seafood: 'seafood',
+    vegetarian: 'vegetarian'
+  };
+  fetchPlaces(categoryMap[document.getElementById('category').value] || '');
+});
+
+document.getElementById('language').addEventListener('change', init);
+
+init();
+</script>
+</body>
+</html>
